@@ -55,7 +55,7 @@ class _netD(nn.Module):
 
         # input is (nc) x 64 x 64
         self.conv1 = nn.Sequential(
-            nn.BatchNorm2d(nc),
+            #nn.BatchNorm2d(nc),
             nn.Conv2d(nc, ndf, kernels[4], strides[4], pads[4], bias=False),
             nn.LeakyReLU(0.2, inplace=True)
         )

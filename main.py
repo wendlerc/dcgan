@@ -10,7 +10,9 @@ import arg_parse
 import imagenet
 import webdataset as wds
 import io
+import wandb
 
+wandb.init(project="dcgan")
 opt = arg_parse.opt
 opt.cuda = True
 
@@ -34,10 +36,9 @@ elif opt.dataset == 'latents':
     def load_latent(z):
         return torch.load(io.BytesIO(z), map_location='cpu').to(torch.float32)
     
-    transform = transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))
     rescale = torch.nn.Tanh()
 
-    dataset = wds.WebDataset('../../data/latents/{000000..000001}.tar')
+    dataset = wds.WebDataset('../../data/latents/{000000..000007}.tar')
     dataset = dataset.rename(image="latent.pt")
     dataset = dataset.map_dict(image=load_latent)
     dataset = dataset.map_dict(image=rescale)
@@ -151,23 +152,30 @@ for epoch in range(opt.niter):
         errD_fake.backward()
         D_G_z1 = output.data.mean()
         errD = errD_real + errD_fake
-        torch.nn.utils.clip_grad_norm_(netD.parameters(), 1)
+        torch.nn.utils.clip_grad_norm_(netD.parameters(), 5)
         optimizerD.step()
 
         ############################
         # (2) Update G network: maximize log(D(G(z)))
         ###########################
-        netG.zero_grad()
-        labelv = Variable(label.fill_(real_label))  # fake labels are real for generator cost
-        output = netD(fake)
-        errG = criterion(output, labelv)
-        errG.backward()
-        D_G_z2 = output.data.mean()
-        torch.nn.utils.clip_grad_norm_(netG.parameters(), 1)
-        optimizerG.step()
+        for _ in range(2):
+            netG.zero_grad()
+            labelv = Variable(label.fill_(real_label))  # fake labels are real for generator cost
+            output = netD(fake)
+            errG = criterion(output, labelv)
+            errG.backward()
+            D_G_z2 = output.data.mean()
+            #torch.nn.utils.clip_grad_norm_(netG.parameters(), 5)
+            optimizerG.step()
+            fake = netG(noisev)
 
         print('[%d/%d][%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
               % (epoch, opt.niter, i, errD.data.item(), errG.data.item(), D_x, D_G_z1, D_G_z2))
+        # same but with wandb
+        wandb.log({'epoch': epoch, 'loss_D': errD.data.item(), 'loss_G': errG.data.item(), 'D(x)': D_x, 'D(G(z))': D_G_z1})
+        # also log gradient norm ||grad||_2
+        wandb.log({'grad_norm_D': torch.nn.utils.clip_grad_norm_(netD.parameters(), 1)})
+        wandb.log({'grad_norm_G': torch.nn.utils.clip_grad_norm_(netG.parameters(), 1)})
         if i % 100 == 0:
             vutils.save_image(real_cpu,
                     '%s/real_samples.png' % opt.outf,
@@ -177,7 +185,12 @@ for epoch in range(opt.niter):
             vutils.save_image(fake.data,
                     '%s/fake_samples_epoch_%03d.png' % (opt.outf, epoch),
                     normalize=True)
-
+            vutils.save_image(fake.data,
+                    '%s/fake_samples_current.png' % (opt.outf),
+                    normalize=True)
+            # upload the current fake and real image to wandb
+            wandb.log({"fake_samples": [wandb.Image(fake.data)]})
+            wandb.log({"real_samples": [wandb.Image(real_cpu)]})
     # do checkpointing
     torch.save(netG.state_dict(), '%s/netG_epoch_%d.pth' % (opt.outf, epoch))
     torch.save(netD.state_dict(), '%s/netD_epoch_%d.pth' % (opt.outf, epoch))
