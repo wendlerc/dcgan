@@ -8,6 +8,8 @@ from torch.autograd import Variable
 import gan_body
 import arg_parse
 import imagenet
+import webdataset as wds
+import io
 
 opt = arg_parse.opt
 opt.cuda = True
@@ -28,15 +30,43 @@ if opt.dataset in ['imagenet', 'food']:
 elif opt.dataset == 'lsun':
     dataset = dset.LSUN(db_path=opt.dataroot, classes=['conference_room_train'],
                         transform=transform)
+elif opt.dataset == 'latents':
+    def load_latent(z):
+        return torch.load(io.BytesIO(z), map_location='cpu').to(torch.float32)
+    
+    transform = transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))
+    rescale = torch.nn.Tanh()
+
+    dataset = wds.WebDataset('../../data/latents/{000000..000001}.tar')
+    dataset = dataset.rename(image="latent.pt")
+    dataset = dataset.map_dict(image=load_latent)
+    dataset = dataset.map_dict(image=rescale)
+    dataset = dataset.to_tuple("image")
+    test = next(iter(dataset))
+    print(test[0].shape)
+    print(test[0].mean(), test[0].std(), test[0].min(), test[0].max())
 
 assert dataset
+
+if opt.dataset == 'latents':
+    shuffle = False
+else:
+    shuffle = True 
+
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batchSize,
-                                         shuffle=True, num_workers=int(opt.workers))
+                                         shuffle=shuffle, num_workers=int(opt.workers))
+
+test = next(iter(dataloader))
+print(test)
+print(test[0].shape)
 
 nz = int(arg_parse.opt.nz) # number of latent variables
 ngf = int(arg_parse.opt.ngf) # inside generator
 ndf = int(arg_parse.opt.ndf) # inside discriminator
-nc = 3 # channels
+if opt.dataset == 'latents':
+    nc = 4
+else:
+    nc = 3 # channels
 
 # custom weights initialization called on netG and netD
 def weights_init(m):
@@ -63,7 +93,7 @@ print(netD)
 
 criterion = nn.BCELoss()
 
-input = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
+input = torch.FloatTensor(opt.batchSize, nc, opt.imageSize, opt.imageSize)
 noise = torch.FloatTensor(opt.batchSize, nz, 1, 1)
 fixed_noise = torch.FloatTensor(opt.batchSize, nz, 1, 1).normal_(0, 1)
 label = torch.FloatTensor(opt.batchSize)
@@ -92,7 +122,11 @@ for epoch in range(opt.niter):
         ###########################
         # train with real
         netD.zero_grad()
-        real_cpu, _ = data
+        if opt.dataset == 'latents':
+            real_cpu = data[0]
+        else:
+            real_cpu, _ = data
+
         batch_size = real_cpu.size(0)
         real_cpu = real_cpu.cuda()
         input.resize_as_(real_cpu).copy_(real_cpu)
@@ -128,9 +162,8 @@ for epoch in range(opt.niter):
         D_G_z2 = output.data.mean()
         optimizerG.step()
 
-        print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
-              % (epoch, opt.niter, i, len(dataloader),
-                 errD.data[0], errG.data[0], D_x, D_G_z1, D_G_z2))
+        print('[%d/%d][%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
+              % (epoch, opt.niter, i, errD.data.item(), errG.data.item(), D_x, D_G_z1, D_G_z2))
         if i % 100 == 0:
             vutils.save_image(real_cpu,
                     '%s/real_samples.png' % opt.outf,

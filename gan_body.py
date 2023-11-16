@@ -6,7 +6,10 @@ from arg_parse import kernels, strides, pads
 nz = int(arg_parse.opt.nz)
 ngf = int(arg_parse.opt.ngf)
 ndf = int(arg_parse.opt.ndf)
-nc = 3
+if arg_parse.opt.dataset == "latents":
+    nc = 4
+else:
+    nc = 3
 
 
 class _netG(nn.Module):
