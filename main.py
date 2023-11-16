@@ -114,7 +114,7 @@ fixed_noise = Variable(fixed_noise)
 # setup optimizer
 # add gradient clipping
 
-optimizerD = optim.SGD(netD.parameters(), lr=opt.lr) 
+optimizerD = optim.Adam(netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
 for epoch in range(opt.niter):
