@@ -19,22 +19,22 @@ class _netG(nn.Module):
             # input is Z, going into a convolution
             nn.ConvTranspose2d(     nz, ngf * 8, kernels[0], strides[0], pads[0], bias=False),
             nn.BatchNorm2d(ngf * 8),
-            nn.ReLU(True),
+            nn.LeakyReLU(0.2, inplace=True),
             # state size. (ngf*8) x 4 x 4
 
             nn.ConvTranspose2d(ngf * 8, ngf * 4, kernels[1], strides[1], pads[1], bias=False),
             nn.BatchNorm2d(ngf * 4),
-            nn.ReLU(True),
+            nn.LeakyReLU(0.2, inplace=True),
             # state size. (ngf*4) x 8 x 8
 
             nn.ConvTranspose2d(ngf * 4, ngf * 2, kernels[2], strides[2], pads[2], bias=False),
             nn.BatchNorm2d(ngf * 2),
-            nn.ReLU(True),
+            nn.LeakyReLU(0.2, inplace=True),
             # state size. (ngf*2) x 16 x 16
 
             nn.ConvTranspose2d(ngf * 2,     ngf, kernels[3], strides[3], pads[3], bias=False),
             nn.BatchNorm2d(ngf),
-            nn.ReLU(True),
+            nn.LeakyReLU(0.2, inplace=True),
             # state size. (ngf) x 32 x 32
 
             nn.ConvTranspose2d(    ngf,      nc, kernels[4], strides[4], pads[4], bias=False),
@@ -55,6 +55,7 @@ class _netD(nn.Module):
 
         # input is (nc) x 64 x 64
         self.conv1 = nn.Sequential(
+            nn.BatchNorm2d(nc),
             nn.Conv2d(nc, ndf, kernels[4], strides[4], pads[4], bias=False),
             nn.LeakyReLU(0.2, inplace=True)
         )

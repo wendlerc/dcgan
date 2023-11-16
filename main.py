@@ -112,7 +112,9 @@ if opt.cuda:
 fixed_noise = Variable(fixed_noise)
 
 # setup optimizer
-optimizerD = optim.Adam(netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
+# add gradient clipping
+
+optimizerD = optim.SGD(netD.parameters(), lr=opt.lr) 
 optimizerG = optim.Adam(netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
 for epoch in range(opt.niter):
@@ -149,6 +151,7 @@ for epoch in range(opt.niter):
         errD_fake.backward()
         D_G_z1 = output.data.mean()
         errD = errD_real + errD_fake
+        torch.nn.utils.clip_grad_norm_(netD.parameters(), 1)
         optimizerD.step()
 
         ############################
@@ -160,6 +163,7 @@ for epoch in range(opt.niter):
         errG = criterion(output, labelv)
         errG.backward()
         D_G_z2 = output.data.mean()
+        torch.nn.utils.clip_grad_norm_(netG.parameters(), 1)
         optimizerG.step()
 
         print('[%d/%d][%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
